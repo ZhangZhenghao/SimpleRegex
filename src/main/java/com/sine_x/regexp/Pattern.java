@@ -1,6 +1,8 @@
 package com.sine_x.regexp;
 
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.Stack;
 
 public class Pattern {
@@ -22,6 +24,33 @@ public class Pattern {
      * @return Pattern
      */
     public static Pattern compile(String exp) {
+        Stack<Fragment> fragStack = new Stack<>();
+        Stack<Character> opStack = new Stack<>();
+        Fragment fragment;
+        Node node;
+        for (int i = 0; i < exp.length(); i++) {
+            char c = exp.charAt(i);
+            switch (c) {
+                case '|': case '(':
+                    opStack.push(c);
+                    break;
+                case '+':   // repeats one or more
+                    fragment = fragStack.pop();
+                    break;
+                case '?':   // repeats zero or one
+                    fragment = fragStack.pop();
+                    node = new SplitNode(fragment.start, null);
+                    fragStack.push(new Fragment(node, fragment.out, ))
+                    break;
+                case '*':   // repeats any time
+                    fragment = fragStack.pop();
+                    break;
+                case ')':
+                    break;
+                default:
+
+            }
+        }
         Pattern pattern = new Pattern();
         SingleNode node1 = new SingleNode('a');
         SingleNode node2 = new SingleNode('b');
@@ -37,14 +66,18 @@ public class Pattern {
      */
     static class Fragment {
         public Node start;
-        public ArrayList<Node> out;
+        public ArrayList<Node> out = new ArrayList<>();
         public Fragment(Node start) {
             this.start = start;
-            this.out = new ArrayList<>();
         }
         public Fragment(Node start, ArrayList<Node> out) {
-            this.start = start;
+            this(start);
             this.out = out;
+        }
+        public Fragment(Node start, ArrayList<Node> outs, Node out) {
+            this(start);
+            this.out = outs;
+            this.out.add(out);
         }
     }
 
@@ -106,11 +139,14 @@ public class Pattern {
      */
     static class SplitNode extends Node {
         public Node out1, out2;
+        @Override
+        public boolean isAlter() {
+            return true;
+        }
         public SplitNode(Node out1, Node out2) {
             this.out1 = out1;
             this.out2 = out2;
         }
     }
-
 
 }
