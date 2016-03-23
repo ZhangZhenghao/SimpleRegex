@@ -1,6 +1,6 @@
 # regexp
 An experimental regular expression library
-## Principle
+## Document
 See [Wiki](https://github.com/ZhangZhenghao/regexp/wiki)
 ## bibliography
 - [Implementing Regular Expressions](https://swtch.com/~rsc/regexp/)
