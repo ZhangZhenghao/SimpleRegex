@@ -5,7 +5,8 @@ import java.util.Stack;
 
 public class Pattern {
 
-    private static boolean DEBUG_MODE = true;
+    private static boolean DEBUG_MODE = true;   // Debug mode switch
+    private static int ID = 0;                  // Node ID
 
     private Node start;
 
@@ -24,34 +25,37 @@ public class Pattern {
      * @return Pattern
      */
     public static Pattern compile(String exp) {
+        if (DEBUG_MODE) {
+            ID = 0;
+        }
         Stack<Fragment> fragStack = new Stack<>();
         Stack<Character> opStack = new Stack<>();
         Stack<Integer> opPosStack = new Stack<>();
         for (int i = 0; i < exp.length(); i++) {
             char c = exp.charAt(i);
             switch (c) {
-                case '|': case '(': {
+                case '|': case '(': {   // explicit operator
                     opStack.push(c);
                     opPosStack.push(i);
                     break;
-                } case '+': {   // repeats one or more
+                } case '+': {           // repeats one or more
                     Fragment fragment = fragStack.pop();
                     SplitNode node = new SplitNode(fragment.start, null);
                     patch(fragment.ends, node);
                     fragStack.push(new Fragment(fragment.start, append(new ArrayList<>(), node)));
                     break;
-                } case '?': {   // repeats zero or one
+                } case '?': {           // repeats zero or one
                     Fragment fragment = fragStack.pop();
                     SplitNode node = new SplitNode(fragment.start, null);
                     fragStack.push(new Fragment(node, append(fragment.ends, node)));
                     break;
-                } case '*': {   // repeats any time
+                } case '*': {           // repeats any time
                     Fragment fragment = fragStack.pop();
                     SplitNode node = new SplitNode(fragment.start, null);
                     patch(fragment.ends, node);
                     fragStack.push(new Fragment(node, append(new ArrayList<>(), node)));
                     break;
-                } case ')': {
+                } case ')': {           // right parenthese
                     int lp = -1;
                     while (!opStack.empty() && opStack.peek() == '|') {
                         Fragment fragment1 = fragStack.pop();
@@ -70,6 +74,7 @@ public class Pattern {
                     } else {
                         throw new IllegalArgumentException("Wrong regular expression: " + exp);
                     }
+                    // try to connect with last fragment
                     if (fragStack.size() > 1 && (opPosStack.empty() || opPosStack.peek() != lp-1)) {
                         Fragment fragment2 = fragStack.pop();
                         Fragment fragment1 = fragStack.pop();
@@ -77,11 +82,11 @@ public class Pattern {
                         fragStack.push(new Fragment(fragment1.start, fragment2.ends));
                     }
                     break;
-                } default: {
+                } default: {                // character
                     SingleNode node = new SingleNode(c);
-                    if (fragStack.empty() || !opPosStack.empty() && opPosStack.peek() == i-1) {
+                    if (fragStack.empty() || !opPosStack.empty() && opPosStack.peek() == i-1) { // no implicit operator
                         fragStack.push(new Fragment(node, append(new ArrayList<>(), node)));
-                    } else {
+                    } else {                // has implicit connect operator
                         Fragment fragment = fragStack.pop();
                         patch(fragment.ends, node);
                         fragStack.push(new Fragment(fragment.start, append(new ArrayList<>(), node)));
@@ -131,6 +136,21 @@ public class Pattern {
     }
 
     /**
+     * Lexer: Lexical analyse
+     */
+    static class Lexer {
+        public enum Type {NODE, PLUS, QM, STAR, LP, RP, OR};
+        public int next;
+        public Type type;
+        public SingleNode node;
+        public Lexer parse(String exp, int i) {
+            Lexer lexer = new Lexer();
+            lexer.type = Type.NODE;
+            return lexer;
+        }
+    }
+
+    /**
      * NFA fragment
      */
     static class Fragment {
@@ -149,6 +169,12 @@ public class Pattern {
      * Abstract node
      */
     static abstract class Node {
+        private int id;
+        public Node() {
+            if (DEBUG_MODE) {
+                id = ID++;
+            }
+        }
         /**
          * match Whether text can bypass the Node
          * @param c A Character in text
@@ -190,7 +216,7 @@ public class Pattern {
         }
         @Override
         public String toString() {
-            return "Matched";
+            return "[" + super.id + "]Matched";
         }
     }
 
@@ -216,7 +242,7 @@ public class Pattern {
         }
         @Override
         public String toString() {
-            return String.valueOf(c);
+            return "[" + super.id + "]" + c;
         }
     }
 
@@ -248,12 +274,12 @@ public class Pattern {
         }
         @Override
         public String toString() {
-            return "Split";
+            return "[" + super.id + "]Split";
         }
     }
 
     public static void main(String[] args) {
-        Pattern pattern = Pattern.compile("((a)|(b))");
+        Pattern pattern = Pattern.compile("a+|c*|b?");
         System.out.println(pattern.start);
     }
 
