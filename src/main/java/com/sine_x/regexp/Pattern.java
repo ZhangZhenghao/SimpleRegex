@@ -1,21 +1,27 @@
 package com.sine_x.regexp;
 
+import com.sine_x.regexp.exeception.ExpressionException;
 import com.sine_x.regexp.node.MatchedNode;
 import com.sine_x.regexp.node.Node;
 import com.sine_x.regexp.node.SingleNode;
 import com.sine_x.regexp.node.SplitNode;
 import com.sine_x.regexp.parser.NodeParser;
-
+import com.sine_x.regexp.parser.RepeatParser;
+import com.sine_x.regexp.util.Fragment;
 
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.Stack;
 
 public class Pattern {
 
     public static boolean DEBUG_MODE = true;   // Debug mode switch
-    public static int ID = 0;                  // Node ID
+    public static int nodeID;                   // Node nodeID
+    public static int copyID;                   // Node copyID;
 
-    private Node start;
+    private int setID ;                         // Set nodeID
+    private Node start;                         // NFA entry
 
     /**
      * match Match the text string with this pattern
@@ -23,7 +29,76 @@ public class Pattern {
      * @return Boolean
      */
     public boolean match(String text) {
-        return true;
+        Set<Node> set1 = startSet(start);
+        Set<Node> set2 = new HashSet<>();
+        for (int i = 0; i < text.length(); i++) {
+            char ch = text.charAt(i);
+            step(set1, ch, set2);
+            Set<Node> temp = set1;
+            set1 = set2;
+            set2 = temp;
+            // if set is empty, failed
+            if (set1.isEmpty()) {
+                return false;
+            }
+        }
+        return isMatch(set1);
+    }
+
+    /**
+     * Find matched state in state set
+     * @param set state set
+     * @return If matched
+     */
+    boolean isMatch(Set<Node> set) {
+        for (Node node : set)
+            if (node.isMatched())
+                return true;
+        return false;
+    }
+
+    /**
+     * Construct start state set
+     * @param node Start node
+     * @return Start state set
+     */
+    private Set<Node> startSet(Node node) {
+        setID++;
+        Set<Node> set = new HashSet<>();
+        addState(set, node);
+        return set;
+    }
+
+    /**
+     * Add a node to set and do split automatically
+     * @param set State set
+     * @param node Node need to be added
+     */
+    private void addState(Set<Node> set, Node node) {
+        if (node == null || node.getLastSet() == setID)
+            return;
+        node.setLastSet(setID);
+        if (node.isAlter()) {
+            SplitNode split = (SplitNode) node;
+            addState(set, split.getOut1());
+            addState(set, split.getOut2());
+            return;
+        }
+        set.add(node);
+    }
+
+    /**
+     * Advance NFA by matching character
+     * @param set1 Current set
+     * @param c Target character
+     * @param set2 Next set
+     */
+    private void step(Set<Node> set1, char c, Set<Node> set2) {
+        set2.clear();
+        setID++;
+        for (Node node : set1)
+            if (node.match(c))
+                addState(set2, ((SingleNode) node).getOut());
     }
 
     /**
@@ -31,38 +106,53 @@ public class Pattern {
      * @param exp Regular expression string
      * @return Pattern
      */
-    public static Pattern compile(String exp) {
-        if (DEBUG_MODE) {
-            ID = 0;
-        }
+    public static Pattern compile(String exp) throws ExpressionException, CloneNotSupportedException {
+        // debug code
+        if (DEBUG_MODE) nodeID = 0;
+
         Stack<Fragment> fragStack = new Stack<>();
         Stack<Character> opStack = new Stack<>();
         Stack<Integer> opPosStack = new Stack<>();
-        int i = 0;
-        while (i < exp.length()) {
-            char c = exp.charAt(i);
-            int next = i + 1;
+        int offset = 0;
+        while (offset < exp.length()) {
+            char c = exp.charAt(offset);
+            int next = offset + 1;
             switch (c) {
                 case '|': case '(':
                     // explicit operator
                     opStack.push(c);
-                    opPosStack.push(i);
+                    opPosStack.push(offset);
                     break;
                 case '+':
                     // Repeat once or more times
-                    fragStack.push(repeatOneOrMore(fragStack.pop()));
+                    requireStackSize(exp, offset, fragStack, 1);
+                    fragStack.push(repeatOnceOrMore(fragStack.pop()));
                     break;
                 case '?':
                     // Don't repeat or repeat once
+                    requireStackSize(exp, offset, fragStack, 1);
                     fragStack.push(repeatNoneOrOnce(fragStack.pop()));
                     break;
                 case '*':
                     // Repeat any time
-                    fragStack.push(repeatAnyTime(fragStack.pop()));
+                    requireStackSize(exp, offset, fragStack, 1);
+                    fragStack.push(repeatAnyTimes(fragStack.pop()));
                     break;
-                case ')': {           // right parenthese
-                    int lp = -1;
+                case '{':
+                    // Repeat
+                    RepeatParser repeat = RepeatParser.parser(exp, offset);
+                    if (repeat.getUpper() == RepeatParser.NONE && repeat.getLower() > 0)
+                        fragStack.push(repeatN(fragStack.pop(), repeat.getLower()));
+                    else if (repeat.getUpper() == RepeatParser.INFINITY)
+                        fragStack.push(repeatNToInfinity(fragStack.pop(), repeat.getLower()));
+                    else
+                        fragStack.push(repeatNtoM(fragStack.pop(), repeat.getLower(), repeat.getUpper()));
+                    next = repeat.getNextPos();
+                    break;
+                case ')':
+                    // right parenthesis
                     while (!opStack.empty() && opStack.peek() == '|') {
+                        requireStackSize(exp, offset, fragStack, 2);
                         Fragment fragment1 = fragStack.pop();
                         Fragment fragment2 = fragStack.pop();
                         fragStack.push(alternates(fragment1, fragment2));
@@ -71,48 +161,61 @@ public class Pattern {
                     }
                     if (!opStack.empty() && opStack.peek() == '(') {
                         opStack.pop();
-                        lp = opPosStack.pop();
+                        fragStack.peek().setLeft(opPosStack.pop());
                     } else {
-                        throw new IllegalArgumentException("Wrong regular expression: " + exp);
-                    }
-                    // try to connect with last fragment
-                    if (fragStack.size() > 1 && (opPosStack.empty() || opPosStack.peek() != lp-1)) {
-                        Fragment fragment2 = fragStack.pop();
-                        Fragment fragment1 = fragStack.pop();
-                        fragStack.push(concatenate((fragment1, fragment2)));
+                        throw new ExpressionException(exp, offset, ExpressionException.ILLEGAL_PARENTHESE);
                     }
                     break;
-                } default: {
+                default:
                     // node
-                    NodeParser nodeParser = NodeParser.parseNode(exp, i);
-                    SingleNode node = nodeParser.getNode();
+                    NodeParser nodeParser = NodeParser.parseNode(exp, offset);
                     next = nodeParser.getNextPos();
-                    if (fragStack.empty() || !opPosStack.empty() && opPosStack.peek() == i-1) { // no implicit operator
-                        fragStack.push(new Fragment(node, append(new ArrayList<>(), node)));
-                    } else {                // has implicit connect operator
-                        Fragment fragment = fragStack.pop();
-                        patch(fragment.ends, node);
-                        fragStack.push(new Fragment(fragment.start, append(new ArrayList<>(), node)));
-                    }
-                }
+                    fragStack.push(new Fragment(offset, nodeParser.getNode()));
             }
+            autoConcatenate(fragStack, opPosStack, exp, next);
+            // update offset
+            offset = next;
         }
         while (!opStack.empty() && opStack.peek() == '|') {
+            requireStackSize(exp, offset, fragStack, 2);
             Fragment fragment1 = fragStack.pop();
             Fragment fragment2 = fragStack.pop();
-            fragStack.push(new Fragment(fragment1.start, fragment2.ends));
+            fragStack.push(alternates(fragment1, fragment2));
             opStack.pop();
             opPosStack.pop();
         }
-        Fragment fragment = fragStack.pop();
-        MatchedNode node = new MatchedNode();
-        patch(fragment.ends, node);
+        // Make pattern
         Pattern pattern = new Pattern();
-        pattern.start = fragment.start;
+        pattern.start = concatenate(fragStack.pop(), new Fragment(exp.length(), new MatchedNode())).getStart();
         return pattern;
     }
 
-    // NFA connect functions
+    /**
+     * Concatenate with previous fragment automatically
+     * @param fragStack The stack save fragments
+     * @param opPosStack The stack save the position of explicit operator
+     * @param exp The regexp string
+     * @param next The next position begin parsing
+     */
+    private static void autoConcatenate(Stack<Fragment> fragStack, Stack<Integer> opPosStack, String exp, int next) {
+        // a postfix operator in the next position, don't concatenate
+        if (next < exp.length() &&
+                (exp.charAt(next) == '+'
+                || exp.charAt(next) == '?'
+                || exp.charAt(next) == '*'
+                || exp.charAt(next) == '{'))
+            return;
+        // two few fragments
+        if (fragStack.size() < 2)
+            return;
+        // no explicit operator in the previous position, do concatenate
+        if (exp.charAt(fragStack.peek().getLeft()-1) != '|'
+                && exp.charAt(fragStack.peek().getLeft()-1) != '(') {
+            Fragment fragment2 = fragStack.pop();
+            Fragment fragment1 = fragStack.pop();
+            fragStack.push(concatenate(fragment1, fragment2));
+        }
+    }
 
     /**
      * Concatenate teo fragment
@@ -121,8 +224,8 @@ public class Pattern {
      * @return Concatenated fragment
      */
     private static Fragment concatenate(Fragment fragment1, Fragment fragment2) {
-        patch(fragment1.ends, fragment2.start);
-        return new Fragment(fragment1.start, fragment2.ends);
+        patch(fragment1.getEnds(), fragment2.getStart());
+        return new Fragment(fragment1.getLeft(), fragment1.getStart(), fragment2.getEnds());
     }
 
     /**
@@ -132,11 +235,11 @@ public class Pattern {
      * @return Alternates fragment
      */
     private static Fragment alternates(Fragment fragment1, Fragment fragment2) {
-        SplitNode node = new SplitNode(fragment1.start, fragment2.start);
+        SplitNode node = new SplitNode(fragment1.getStart(), fragment2.getStart());
         ArrayList<Node> ends = new ArrayList<>();
-        ends.addAll(fragment1.ends);
-        ends.addAll(fragment2.ends);
-        return new Fragment(node, ends);
+        ends.addAll(fragment1.getEnds());
+        ends.addAll(fragment2.getEnds());
+        return new Fragment(Math.min(fragment1.getLeft(), fragment2.getLeft()), node, ends);
     }
 
     /**
@@ -145,8 +248,8 @@ public class Pattern {
      * @return Repeated fragment
      */
     private static Fragment repeatNoneOrOnce(Fragment fragment) {
-        SplitNode node = new SplitNode(fragment.start, null);
-        return new Fragment(node, append(fragment.ends, node));
+        SplitNode node = new SplitNode(fragment.getStart());
+        return new Fragment(fragment.getLeft(), node, append(fragment.getEnds(), node));
     }
 
     /**
@@ -154,10 +257,10 @@ public class Pattern {
      * @param fragment Fragment need repeating
      * @return Repeated fragment
      */
-    private static Fragment repeatOneOrMore(Fragment fragment) {
-        SplitNode node = new SplitNode(fragment.start, null);
-        patch(fragment.ends, node);
-        return new Fragment(fragment.start, append(new ArrayList<>(), node));
+    private static Fragment repeatOnceOrMore(Fragment fragment) {
+        SplitNode node = new SplitNode(fragment.getStart());
+        patch(fragment.getEnds(), node);
+        return new Fragment(fragment.getLeft(), fragment.getStart(), append(new ArrayList<>(), node));
     }
 
     /**
@@ -165,13 +268,66 @@ public class Pattern {
      * @param fragment Fragment need repeating
      * @return Repeated fragment
      */
-    private static Fragment repeatAnyTime(Fragment fragment) {
-        SplitNode node = new SplitNode(fragment.start, null);
-        patch(fragment.ends, node);
-        return new Fragment(node, append(new ArrayList<>(), node));
+    private static Fragment repeatAnyTimes(Fragment fragment) {
+        SplitNode node = new SplitNode(fragment.getStart());
+        patch(fragment.getEnds(), node);
+        return new Fragment(fragment.getLeft(), node, append(new ArrayList<>(), node));
     }
 
-    // helper functions for compiler
+    /**
+     * Repeat fragment for N times
+     * @param fragment Fragment need repeating
+     * @param N Repeat time
+     * @return Repeated fragment
+     */
+    private static Fragment repeatN(Fragment fragment, int N) throws CloneNotSupportedException {
+        Fragment fragment1 = fragment;
+        for (int i = 1; i < N; i++)
+            fragment1 = concatenate(fragment1, fragment.clone());
+        return fragment1;
+    }
+
+    /**
+     * Repeat fragment for at least N times
+     * @param fragment Fragment need repeating
+     * @param N At least N times
+     * @return Repeated fragment
+     */
+    private static Fragment repeatNToInfinity(Fragment fragment, int N) throws CloneNotSupportedException {
+        if (N == 0)
+            return repeatAnyTimes(fragment);
+        if (N == 1)
+            return repeatOnceOrMore(fragment);
+        Fragment fragment1 = fragment;
+        for (int i = 2; i < N; i++)
+            fragment1 = concatenate(fragment1, fragment.clone());
+        return concatenate(fragment1, repeatOnceOrMore(fragment.clone()));
+    }
+
+    /**
+     * Repeat fragment
+     * @param fragment Fragment need repeating
+     * @param N At least N times
+     * @param M At most M times
+     * @return Repeated fragment
+     */
+    private static Fragment repeatNtoM(Fragment fragment, int N, int M) throws CloneNotSupportedException {
+        if (N == M)
+            return repeatN(fragment, N);
+        if (N == 0) {
+            Fragment fragment1 = repeatNoneOrOnce(fragment.clone());
+            for (int i = 1; i < M; i++)
+                fragment1 = concatenate(fragment1, repeatNoneOrOnce(fragment.clone()));
+            return fragment1;
+        } else {
+            Fragment fragment1 = fragment;
+            for (int i = 1; i < N; i++)
+                fragment1 = concatenate(fragment1, fragment.clone());
+            for (int i = N; i < M; i++)
+                fragment1 = concatenate(fragment1, repeatNoneOrOnce(fragment.clone()));
+            return fragment1;
+        }
+    }
 
     /**
      * Set node "out" as the nextPos node of all nodes in exit nodes array
@@ -195,40 +351,22 @@ public class Pattern {
         return nodes;
     }
 
-    // exception detector
-
-    private static boolean assertStackSize() {
-
-    }
-
     /**
-     * Check stack size before pop
-     * @param size Required size
-     * @return If
+     * Check the size of opStack, otherwise throw exception
+     * @param regexp Regexp string
+     * @param pos Position in regexp string
+     * @param stack OperationStack
+     * @param size Require size
+     * @throws ExpressionException
      */
-    private static boolean requireStackSize(int size) {
-
+    private static void requireStackSize(String regexp, int pos, Stack stack, int size) throws ExpressionException {
+        if (stack.size() < size)
+            throw new ExpressionException(regexp, pos, ExpressionException.MISSING_OPERANDS);
     }
 
-    /**
-     * NFA fragment
-     */
-    private static class Fragment {
-        Node start;
-        ArrayList<Node> ends = new ArrayList<>();
-        Fragment(Node start) {
-            this.start = start;
-        }
-        Fragment(Node start, ArrayList<Node> ends) {
-            this(start);
-            this.ends = ends;
-        }
-    }
-
-
-    public static void main(String[] args) {
-        Pattern pattern = Pattern.compile("a+|c*|b?");
-        System.out.println(pattern.start);
+    public static void main(String[] args) throws Exception {
+        Pattern pattern = Pattern.compile("\\d+\\.\\d+\\.\\d+\\.\\d+");
+        System.out.println(pattern.match("172.0.0.1"));
     }
 
 }

@@ -2,7 +2,9 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/regexp.iml" filepath="$PROJECT_DIR$/regexp.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/regexp.iml" filepath="$PROJECT_DIR$/.idea/modules/regexp.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/regexp_main.iml" filepath="$PROJECT_DIR$/.idea/modules/regexp_main.iml" group="regexp" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/regexp_test.iml" filepath="$PROJECT_DIR$/.idea/modules/regexp_test.iml" group="regexp" />
     </modules>
   </component>
 </project>
