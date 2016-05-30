@@ -16,7 +16,7 @@ import java.util.Stack;
 
 public class Pattern {
 
-    public static boolean DEBUG_MODE = true;   // Debug mode switch
+    public static boolean DEBUG_MODE = true;    // Debug mode switch
     public static int nodeID;                   // Node nodeID
     public static int copyID;                   // Node copyID;
 
@@ -365,7 +365,7 @@ public class Pattern {
     }
 
     public static void main(String[] args) throws Exception {
-        Pattern pattern = Pattern.compile("\\d+\\.\\d+\\.\\d+\\.\\d+");
+        Pattern pattern = Pattern.compile("[^1270.]+");
         System.out.println(pattern.match("172.0.0.1"));
     }
 
