@@ -12,6 +12,6 @@ public class MatchedState extends AbstractState {
 
     @Override
     public String toString() {
-        return getClass().getName() + '@' + Integer.toHexString(hashCode());
+        return String.format("MatchedState@%x", hashCode());
     }
 }

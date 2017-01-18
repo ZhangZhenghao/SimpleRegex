@@ -1,8 +1,0 @@
-<component name="ArtifactManager">
-  <artifact type="jar" name="regexp:jar">
-    <output-path>$PROJECT_DIR$/out/artifacts/regexp_jar</output-path>
-    <root id="archive" name="regexp.jar">
-      <element id="module-output" name="regexp" />
-    </root>
-  </artifact>
-</component>

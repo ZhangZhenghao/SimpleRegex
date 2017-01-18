@@ -21,4 +21,8 @@ public class CharClassState extends State {
         return complement ^ set.contains(c);
     }
 
+    @Override
+    public String toString() {
+        return String.format("CharClassState(%s,%b)@%x", set, complement, hashCode());
+    }
 }

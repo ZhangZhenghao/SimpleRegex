@@ -1,13 +1,15 @@
 package com.sine_x.regexp.state;
 
+import java.util.logging.Logger;
+
 /**
  * Abstract state
  */
 public abstract class AbstractState implements Cloneable {
 
-    private int lastSet;
+    protected static Logger logger = Logger.getLogger("State");
 
-    AbstractState() {}
+    private int lastSet;
 
     public boolean match(char c) {
         return false;
@@ -23,11 +25,16 @@ public abstract class AbstractState implements Cloneable {
 
     public void setOut(AbstractState out) {}
 
+    public int getLastSet() {
+        return lastSet;
+    }
+
     public void setLastSet(int lastSet) {
         this.lastSet = lastSet;
     }
 
-    public int getLastSet() {
-        return lastSet;
+    @Override
+    public Object clone() throws CloneNotSupportedException {
+        return super.clone();
     }
 }

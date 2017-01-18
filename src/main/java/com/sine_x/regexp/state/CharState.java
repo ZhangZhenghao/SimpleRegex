@@ -13,4 +13,8 @@ public class CharState extends State {
         return this.c == c;
     }
 
+    @Override
+    public String toString() {
+        return String.format("CharState('%c')@%x", c, hashCode());
+    }
 }

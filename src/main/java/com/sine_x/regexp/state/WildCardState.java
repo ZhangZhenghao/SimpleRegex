@@ -7,4 +7,8 @@ public class WildCardState extends State {
         return true;
     }
 
+    @Override
+    public String toString() {
+        return String.format("WildCardState@%x", hashCode());
+    }
 }
