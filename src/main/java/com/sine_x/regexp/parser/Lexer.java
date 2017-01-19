@@ -25,12 +25,13 @@ public class Lexer implements Parser.Lexer {
             case '+': case '?': case '*': case '|':
             case '.': case '(': case ')': case '\\':
             case '[': case '^': case '-': case ']':
-            case '{': case ',': case '}':
+            case '{': case ',': case '}': case 'u':
+            case 'x':
                   return yylval;
             default:
                 if (Character.isDigit(yylval))
                     return DIGIT;
-                return CHAR;
+                return OTHER;
         }
     }
 
