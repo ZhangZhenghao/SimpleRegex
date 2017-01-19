@@ -6,13 +6,16 @@ import com.sine_x.regexp.parser.Parser;
 import com.sine_x.regexp.state.*;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 public class Pattern {
 
     private int setID;
     private AbstractState start;
+    private Map<Set<AbstractState>, DState> map = new HashMap<Set<AbstractState>, DState>();
 
     public void setStart(AbstractState start) {
         this.start = start;
@@ -38,20 +41,19 @@ public class Pattern {
      * @return Boolean
      */
     public boolean match(String text) {
-        Set<AbstractState> set1 = startSet(start);
-        Set<AbstractState> set2 = new HashSet<AbstractState>();
+        DState state = determine(startSet());
         for (int i = 0; i < text.length(); i++) {
-            char ch = text.charAt(i);
-            step(set1, ch, set2);
-            Set<AbstractState> temp = set1;
-            set1 = set2;
-            set2 = temp;
-            // if set is empty, failed
-            if (set1.isEmpty()) {
-                return false;
+            char c = text.charAt(i);
+            DState next = state.getNext(c);
+            if (next == null) {
+                Set<AbstractState> set = new HashSet<AbstractState>();
+                step(state.getSet(), c, set);
+                next = determine(set);
+                state.setNext(c, next);
             }
+            state = next;
         }
-        return isMatch(set1);
+        return isMatch(state.getSet());
     }
 
     /**
@@ -68,32 +70,31 @@ public class Pattern {
 
     /**
      * Construct start state set
-     * @param abstractState Start abstractState
      * @return Start state set
      */
-    private Set<AbstractState> startSet(AbstractState abstractState) {
+    private Set<AbstractState> startSet() {
         setID++;
         Set<AbstractState> set = new HashSet<AbstractState>();
-        addState(set, abstractState);
+        addState(set, start);
         return set;
     }
 
     /**
-     * Add a abstractState to set and do split automatically
+     * Add a state to set and do split automatically
      * @param set State set
-     * @param abstractState AbstractState need to be added
+     * @param state AbstractState need to be added
      */
-    private void addState(Set<AbstractState> set, AbstractState abstractState) {
-        if (abstractState == null || abstractState.getLastSet() == setID)
+    private void addState(Set<AbstractState> set, AbstractState state) {
+        if (state.getLastSet() == setID)
             return;
-        abstractState.setLastSet(setID);
-        if (abstractState.isAlter()) {
-            SplitState split = (SplitState) abstractState;
+        state.setLastSet(setID);
+        if (state.isAlter()) {
+            SplitState split = (SplitState) state;
             addState(set, split.getOut1());
             addState(set, split.getOut2());
             return;
         }
-        set.add(abstractState);
+        set.add(state);
     }
 
     /**
@@ -108,5 +109,16 @@ public class Pattern {
         for (AbstractState abstractState : set1)
             if (abstractState.match(c))
                 addState(set2, ((State) abstractState).getOut());
+    }
+
+    /**
+     * Convert state set to DFA state
+     * @param set State set
+     * @return DFA state
+     */
+    private DState determine(Set<AbstractState> set) {
+        if (map.get(set) == null)
+            map.put(set, new DState(set));
+        return map.get(set);
     }
 }
