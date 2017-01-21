@@ -3,15 +3,24 @@ version '1.0-SNAPSHOT'
 
 apply plugin: 'java'
 
-sourceCompatibility = 1.5
-
 repositories {
     mavenCentral()
 }
 
 dependencies {
     testCompile group: 'junit', name: 'junit', version: '4.11'
-    compile 'com.google.guava:guava:19.0'
+    compile 'com.google.guava:guava:21.0'
     compile 'com.github.mifmif:generex:1.0.2'
 }
 
+task genParser(type: Exec) {
+    workingDir './src/main'
+    commandLine 'bash', '-c', 'bison res/parser.yacc -o java/com/sine_x/regex/parser/Parser.java'
+}
+
+compileJava.dependsOn(genParser)
+
+task driver(type: JavaExec, dependsOn: build) {
+    main = 'com.sine_x.regex.Driver'
+    classpath = sourceSets.main.runtimeClasspath
+}

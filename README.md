@@ -1,4 +1,4 @@
-# regexp
+# SimpleRegex
 An experimental regular expression library.
 
 ## Syntax
